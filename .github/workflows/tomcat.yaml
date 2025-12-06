@@ -1,1 +1,106 @@
+name: CI/CD pipeline to deploy to tomcat
 
+on:  
+  push: 
+    branches: 
+      - master
+
+jobs:
+
+  # ------------------- 1. DEV Deployment -------------------
+  deploy-dev:
+    runs-on: ubuntu-latest
+    environment: DEV
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build and Package WAR
+        run: mvn clean package -DskipTests
+
+      - name: Deploy to DEV Tomcat
+        run: |
+          curl -v -u ${{ secrets.TOMCAT_USER_DEV }}:${{ secrets.TOMCAT_PASSWORD_DEV }} \
+          -T target/TrainBook-1.0.0-SNAPSHOT.war \
+          "http://${{ secrets.TOMCAT_HOST_DEV }}:8080/manager/text/deploy?path=/TrainBook&update=true"
+
+
+  # ------------------- 2. TEST Deployment -------------------
+  deploy-test:
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: TEST
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build and Package WAR
+        run: mvn clean package -DskipTests
+
+      - name: Deploy to TEST Tomcat
+        run: |
+          curl -v -u ${{ secrets.TOMCAT_USER_TEST }}:${{ secrets.TOMCAT_PASSWORD_TEST }} \
+          -T target/TrainBook-1.0.0-SNAPSHOT.war \
+          "http://${{ secrets.TOMCAT_HOST_TEST }}:8080/manager/text/deploy?path=/TrainBook&update=true"
+
+
+  # ------------------- 3. PRE-PROD Deployment -------------------
+  deploy-preprod:
+    runs-on: ubuntu-latest
+    needs: deploy-test
+    environment: PRE-PROD
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build and Package WAR
+        run: mvn clean package -DskipTests
+
+      - name: Deploy to PRE-PROD Tomcat
+        run: |
+          curl -v -u ${{ secrets.TOMCAT_USER_PREPROD }}:${{ secrets.TOMCAT_PASSWORD_PREPROD }} \
+          -T target/TrainBook-1.0.0-SNAPSHOT.war \
+          "http://${{ secrets.TOMCAT_HOST_PREPROD }}:8080/manager/text/deploy?path=/TrainBook&update=true"
+
+
+  # ------------------- 4. PROD Deployment -------------------
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: deploy-preprod
+    environment: PROD
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup JDK
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Build and Package WAR
+        run: mvn clean package -DskipTests
+
+      - name: Deploy to PROD Tomcat
+        run: |
+          curl -v -u ${{ secrets.TOMCAT_USER_PROD }}:${{ secrets.TOMCAT_PASSWORD_PROD }} \
+          -T target/TrainBook-1.0.0-SNAPSHOT.war \
+          "http://${{ secrets.TOMCAT_HOST_PROD }}:8080/manager/text/deploy?path=/TrainBook&update=true"
