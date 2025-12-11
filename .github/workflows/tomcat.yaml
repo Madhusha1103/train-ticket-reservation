@@ -19,6 +19,9 @@ jobs:
     - name: Build with Maven (skip tests)
       run: mvn clean package -DskipTests
 
+    # ---------------------------------------
+    # 1. SonarQube Analysis
+    # ---------------------------------------
     - name: sonar code quality
       run: |
         mvn clean verify -DskipTests sonar:sonar \
@@ -26,27 +29,37 @@ jobs:
           -Dsonar.host.url="${{ secrets.SONAR_HOST }}" \
           -Dsonar.login="${{ secrets.SONAR_TOKEN }}"
 
+    # ---------------------------------------
+    # 2. Configure Maven settings for Nexus 
+    # ---------------------------------------
+    - name: Configure Maven settings.xml for Nexus
+      run: |
+        mkdir -p ~/.m2
+        cat <<EOF > ~/.m2/settings.xml
+        <settings>
+          <servers>
+            <server>
+              <id>nexus</id>
+              <username>${{ secrets.NEXUS_USERNAME }}</username>
+              <password>${{ secrets.NEXUS_PASSWORD }}</password>
+            </server>
+          </servers>
+        </settings>
+        EOF
+
+    # ---------------------------------------
+    # 3. Upload artifact to Nexus
+    # ---------------------------------------
+    - name: Upload Artifact to Nexus
+      run: |
+        mvn deploy \
+          -DaltDeploymentRepository=nexus::default::${{ secrets.NEXUS_REPO_URL }}
+
+    # ---------------------------------------
+    # 4. Deploy WAR to Tomcat
+    # ---------------------------------------
     - name: Deploy WAR to Tomcat
       run: |
         curl -v -u ${{ secrets.TOMCAT_USER }}:${{ secrets.TOMCAT_PASSWORD }} \
         -T target/TrainBook-1.0.0-SNAPSHOT.war \
         "http://${{ secrets.TOMCAT_HOST }}:8080/manager/text/deploy?path=/myapp&update=true"
-
-
-    - name: Configure Maven settings.xml for Nexus
-      run: |
-          mkdir -p ~/.m2
-          cat <<EOF > ~/.m2/settings.xml
-          <settings>
-            <servers>
-              <server>
-                <id>nexus</id>
-                <username>${{ secrets.NEXUS_USERNAME }}</username>
-                <password>${{ secrets.NEXUS_PASSWORD }}</password>
-              </server>
-            </servers>
-          </settings>
-          EOF
-
-    - name: Upload Artifact to Nexus
-      run: mvn deploy -DaltDeploymentRepository=nexus::default::${{ secrets.NEXUS_REPO_URL }}
